@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cabingo</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #f4f4f4;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+    }
+
+    input {
+      padding: 8px;
+      margin: 5px;
+    }
+
+    button {
+      background: #ff5c5c;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #map {
+      height: 400px;
+      margin-top: 20px;
+      border-radius: 10px;
+    }
+
+    li {
+      list-style: none;
+      background: white;
+      padding: 10px;
+      margin: 10px;
+      border-radius: 10px;
+      text-align: left;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <h1>Hytter</h1>
+
+  <!-- LOGIN -->
+  <div id="loginBox">
+    <input id="email" placeholder="email" />
+    <input id="password" type="password" placeholder="passord" />
+    <button onclick="login()">Login</button>
+  </div>
+
+  <!-- LOGOUT -->
+  <button id="logoutBtn" class="hidden" onclick="logout()">Logout</button>
+
+  <ul id="list"></ul>
+
+  <div id="map"></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const API = "http://localhost:3000";
+
+const list = document.getElementById("list");
+const loginBox = document.getElementById("loginBox");
+const logoutBtn = document.getElementById("logoutBtn");
+
+let token = localStorage.getItem("token");
+
+if (token) loginSuccess();
+
+// 🗺️ MAP
+const map = L.map("map").setView([61, 10], 5);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "&copy; OpenStreetMap"
+}).addTo(map);
+
+// 📍 USER LOCATION
+let userLat = null;
+let userLng = null;
+let routeLine = null;
+
+navigator.geolocation.getCurrentPosition(pos => {
+  userLat = pos.coords.latitude;
+  userLng = pos.coords.longitude;
+
+  L.marker([userLat, userLng])
+    .addTo(map)
+    .bindPopup("📍 Du er her");
+});
+
+// 📏 DISTANCE
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI/180) *
+    Math.cos(lat2 * Math.PI/180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return (R * c).toFixed(1);
+}
+
+// 🔑 LOGIN
+function login() {
+  fetch(API + "/login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      email: document.getElementById("email").value,
+      password: document.getElementById("password").value
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.token) {
+      localStorage.setItem("token", data.token);
+      token = data.token;
+      loginSuccess();
+    } else {
+      alert("Feil login");
+    }
+  });
+}
+
+function loginSuccess() {
+  loginBox.classList.add("hidden");
+  logoutBtn.classList.remove("hidden");
+  loadCabins();
+}
+
+function logout() {
+  localStorage.removeItem("token");
+  location.reload();
+}
+
+// 📦 LOAD CABINS
+function loadCabins() {
+  fetch(API + "/cabins")
+    .then(res => res.json())
+    .then(data => {
+      list.innerHTML = "";
+const bounds = [];
+
+data.forEach(cabin => {
+  if (cabin.lat && cabin.lng) {
+    bounds.push([cabin.lat, cabin.lng]);
+  }
+});
+
+if (bounds.length > 0) {
+  map.fitBounds(bounds);
+}
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker) map.removeLayer(layer);
+      });
+
+      // legg tilbake bruker
+      if (userLat) {
+        L.marker([userLat, userLng])
+          .addTo(map)
+          .bindPopup("📍 Du er her");
+      }
+
+      data.forEach(cabin => {
+
+        // 📍 marker
+        if (cabin.lat && cabin.lng) {
+          const marker = L.marker([cabin.lat, cabin.lng]).addTo(map);
+
+          marker.bindPopup(`
+            <b>${cabin.name}</b><br>
+            ${cabin.location}<br>
+            <a href="https://www.google.com/maps?q=${cabin.lat},${cabin.lng}" target="_blank">
+              Naviger hit
+            </a>
+          `);
+        }
+
+        // 📏 distance
+        let distance = "";
+        if (userLat) {
+          distance = getDistance(userLat, userLng, cabin.lat, cabin.lng) + " km unna";
+        }
+
+        // 📋 liste
+        const li = document.createElement("li");
+
+        li.innerHTML = `
+          <div onclick="zoomTo(${cabin.lat}, ${cabin.lng})">
+            <b>${cabin.name}</b><br>
+            ${cabin.location}<br>
+            <small>${distance}</small>
+          </div>
+          ${token ? `<button onclick="deleteCabin(${cabin.id})">Slett</button>` : ""}
+        `;
+
+        list.appendChild(li);
+      });
+    });
+}
+
+// 🧭 ZOOM + ROUTE
+function zoomTo(lat, lng) {
+  map.setView([lat, lng], 10);
+
+  if (!userLat) return;
+
+  if (routeLine) map.removeLayer(routeLine);
+
+  routeLine = L.polyline([
+    [userLat, userLng],
+    [lat, lng]
+  ], {color: "blue"}).addTo(map);
+}
+
+// ❌ DELETE
+function deleteCabin(id) {
+  fetch(API + "/cabins/" + id, {
+    method: "DELETE",
+    headers: { Authorization: token }
+  }).then(() => loadCabins());
+}
+
+// ➕ ADD CABIN
+map.on("click", e => {
+  if (!token) {
+    alert("Logg inn først!");
+    return;
+  }
+
+  const name = prompt("Navn:");
+  const location = prompt("Sted:");
+
+  if (!name) return;
+
+  fetch(API + "/cabins", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token
+    },
+    body: JSON.stringify({
+      name,
+      location,
+      lat: e.latlng.lat,
+      lng: e.latlng.lng
+    })
+  }).then(() => loadCabins());
+});
+
+// 🚀 START
+loadCabins();
+</script>
+
+</body>
+</html>
