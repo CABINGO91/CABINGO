@@ -20,14 +20,13 @@ app.get("/", (req, res) => {
   res.send("Cabingo backend is running 🚀");
 });
 
-// ✅ HENT ALLE HYTTER
 app.get("/cabins", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM cabins ORDER BY id DESC");
+    const result = await pool.query("SELECT * FROM cabins");
     res.json(result.rows);
   } catch (err) {
-    console.error("DB ERROR:", err);
-    res.status(500).send("Fetch error");
+    console.error("FULL ERROR:", err);
+    res.status(500).send(err.message); // 👈 dette er key
   }
 });
 
