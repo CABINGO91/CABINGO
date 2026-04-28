@@ -1,14 +1,13 @@
-import express from "express";
-import pkg from "pg";
-import cors from "cors";
-
-const { Pool } = pkg;
+const express = require("express");
+const cors = require("cors");
+const { Pool } = require("pg");
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// DATABASE CONNECTION (FIXED SSL)
+// ✅ DATABASE CONNECTION (Render fix med SSL)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -16,12 +15,12 @@ const pool = new Pool({
   },
 });
 
-// TEST ROUTE
+// ✅ TEST ROUTE
 app.get("/", (req, res) => {
-  res.send("Server is running 🚀");
+  res.send("Cabingo backend is running 🚀");
 });
 
-// GET ALL CABINS
+// ✅ HENT ALLE HYTTER
 app.get("/cabins", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM cabins ORDER BY id DESC");
@@ -32,14 +31,14 @@ app.get("/cabins", async (req, res) => {
   }
 });
 
-// ADD CABIN
+// ✅ LEGG TIL HYTTE
 app.post("/cabins", async (req, res) => {
-  const { name, location, lat, lng } = req.body;
+  const { name, location, price } = req.body;
 
   try {
     const result = await pool.query(
-      "INSERT INTO cabins (name, location, lat, lng) VALUES ($1, $2, $3, $4) RETURNING *",
-      [name, location, lat, lng]
+      "INSERT INTO cabins (name, location, price) VALUES ($1, $2, $3) RETURNING *",
+      [name, location, price]
     );
 
     res.json(result.rows[0]);
@@ -49,7 +48,7 @@ app.post("/cabins", async (req, res) => {
   }
 });
 
-// DELETE CABIN
+// ✅ SLETT HYTTE
 app.delete("/cabins/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -62,7 +61,7 @@ app.delete("/cabins/:id", async (req, res) => {
   }
 });
 
-// START SERVER
+// ✅ START SERVER
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
