@@ -1,78 +1,66 @@
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
-const jwt = require("jsonwebtoken");
+import express from "express";
+import pkg from "pg";
+const { Pool } = pkg;
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-// 🔌 DATABASE
+// DATABASE CONNECTION (Render PostgreSQL)
 const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "cabingo",
-  password: "957raire", // ← ditt postgres passord
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// 🔐 AUTH
-function auth(req, res, next) {
-  const token = req.headers.authorization;
-
-  if (!token) {
-    return res.status(401).json({ error: "Ikke logget inn" });
-  }
-
-  try {
-    jwt.verify(token, "secret");
-    next();
-  } catch {
-    res.status(403).json({ error: "Ugyldig token" });
-  }
-}
-
-// 🔑 LOGIN (ENKEL – UTEN BCRYPT)
-app.post("/login", (req, res) => {
-  const { email, password } = req.body;
-
-  // 🔥 HARDKODET LOGIN
-  if (email === "admin@test.no" && password === "957raire") {
-    const token = jwt.sign({ user: email }, "secret");
-    return res.json({ token });
-  }
-
-  res.status(401).json({ error: "Feil login" });
+// TEST ROUTE
+app.get("/", (req, res) => {
+  res.send("Cabingo API is running 🚀");
 });
 
-// 📦 GET cabins
+// HENT ALLE HYTTER
 app.get("/cabins", async (req, res) => {
-  const result = await pool.query("SELECT * FROM cabins ORDER BY id DESC");
-  res.json(result.rows);
+  try {
+    const result = await pool.query("SELECT * FROM cabins");
+    res.json(result.rows);
+  } catch (err) {
+    console.error("DB ERROR:", err);
+    res.status(500).send("Fetch error");
+  }
 });
 
-// ➕ POST cabin (krever login)
-app.post("/cabins", auth, async (req, res) => {
+// LEGG TIL HYTTE
+app.post("/cabins", async (req, res) => {
   const { name, location, lat, lng } = req.body;
 
-  await pool.query(
-    "INSERT INTO cabins (name, location, lat, lng) VALUES ($1, $2, $3, $4)",
-    [name, location, lat, lng]
-  );
-
-  res.json({ success: true });
+  try {
+    const result = await pool.query(
+      "INSERT INTO cabins (name, location, lat, lng) VALUES ($1, $2, $3, $4) RETURNING *",
+      [name, location, lat, lng]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("DB ERROR:", err);
+    res.status(500).send("Insert error");
+  }
 });
 
-// ❌ DELETE cabin (krever login)
-app.delete("/cabins/:id", auth, async (req, res) => {
+// SLETT HYTTE
+app.delete("/cabins/:id", async (req, res) => {
   const { id } = req.params;
 
-  await pool.query("DELETE FROM cabins WHERE id = $1", [id]);
-
-  res.json({ success: true });
+  try {
+    await pool.query("DELETE FROM cabins WHERE id = $1", [id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DB ERROR:", err);
+    res.status(500).send("Delete error");
+  }
 });
 
-// 🚀 START
-app.listen(3000, () => {
-  console.log("Server kjører på http://localhost:3000");
+// START SERVER
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server kjører på port " + PORT);
 });
