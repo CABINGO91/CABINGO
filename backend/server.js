@@ -110,4 +110,4 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server kjører på port " + PORT);
-});
+});const stripe = new Stripe("sk_test_sk_test_51TRJAZCz7vZpGxOL3SXFbl2PzTEeAPJqqLnZkkVNOdaA05DgcanLUF7Qx4f3B6J47RoKaTAS68qwqUUrNJLbpeFN00EVGGH6pp");
