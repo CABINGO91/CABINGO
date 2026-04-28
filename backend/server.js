@@ -65,4 +65,4 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server kjører på port " + PORT);
-});
+});res.status(500).send(err.message);
